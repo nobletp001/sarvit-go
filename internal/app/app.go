@@ -14,23 +14,21 @@ import (
 	"github.com/nobletp001/sarvit/internal/repository"
 	"github.com/nobletp001/sarvit/internal/service"
 	httptransport "github.com/nobletp001/sarvit/internal/transport/http"
-	"go.mongodb.org/mongo-driver/mongo" // ✅ add this import
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 func Run() error {
 	cfg := config.Load()
 
-	// =============================
-	// STEP 1: SELECT DATABASE DRIVER
-	// =============================
+	// ========== DB DRIVER ==========
 	dbDriver := cfg.DBDriver
 	if dbDriver == "" {
-		dbDriver = "mongo" // default
+		dbDriver = "mongo"
 	}
 	log.Printf("🧠 Using database driver: %s", dbDriver)
 
 	var (
-		client      *mongo.Client // ✅ corrected type
+		client      *mongo.Client
 		userRepo    repository.UserRepository
 		todoRepo    repository.TodoRepository
 		commentRepo repository.CommentRepository
@@ -38,7 +36,6 @@ func Run() error {
 
 	switch dbDriver {
 	case "mongo":
-		// --- Connect to Mongo ---
 		mongoClient, err := db.Connect(cfg)
 		if err != nil {
 			log.Printf("❌ MongoDB connect/ping failed: %v", err)
@@ -47,49 +44,46 @@ func Run() error {
 		defer func() { _ = mongoClient.Disconnect(context.Background()) }()
 		log.Printf("✅ Mongo connected (db=%s)", cfg.MongoDB)
 
-		client = mongoClient // assign handle
+		client = mongoClient
 
-		// --- Initialize Mongo Repositories ---
-		userRepo, err = repository.NewUserRepository(client, cfg.MongoDB)
-		if err != nil {
-			return err
+		var errRepo error
+		userRepo, errRepo = repository.NewUserRepository(client, cfg.MongoDB)
+		if errRepo != nil {
+			return errRepo
 		}
-		todoRepo, err = repository.NewTodoRepository(client, cfg.MongoDB)
-		if err != nil {
-			return err
+		todoRepo, errRepo = repository.NewTodoRepository(client, cfg.MongoDB)
+		if errRepo != nil {
+			return errRepo
 		}
-		commentRepo, err = repository.NewCommentRepository(client, cfg.MongoDB)
-		if err != nil {
-			return err
+		commentRepo, errRepo = repository.NewCommentRepository(client, cfg.MongoDB)
+		if errRepo != nil {
+			return errRepo
 		}
-
 	default:
-		log.Fatalf("❌ Unsupported DB driver: %s (only 'mongo' supported now)", dbDriver)
+		log.Fatalf("❌ Unsupported DB driver: %s (only 'mongo' supported)", dbDriver)
 	}
 
-	// =============================
-	// STEP 2: SERVICES
-	// =============================
+	// ========== SERVICES ==========
 	authSvc := service.NewAuthService(cfg, userRepo)
 	todoSvc := service.NewTodoService(todoRepo)
 	commentSvc := service.NewCommentService(commentRepo, todoRepo)
 
-	// =============================
-	// STEP 3: HTTP SERVER
-	// =============================
+	// ========== HTTP SERVER ==========
 	app := httptransport.NewServer(cfg, authSvc, todoSvc, commentSvc)
 
-	// Port fallback
-	port := cfg.Port
+	// ---- LISTEN ON RAILWAY PORT (fallbacks for local) ----
+	port := os.Getenv("PORT") // provided by Railway
 	if port == "" {
-		port = "3000"
+		if cfg.Port != "" {
+			port = cfg.Port
+		} else {
+			port = "3000"
+		}
 	}
 	addr := ":" + port
-	log.Printf("🚀 Server starting on http://localhost%s", addr)
+	log.Printf("🚀 Server starting on %s (RAILWAY PORT=%s)", addr, os.Getenv("PORT"))
 
-	// =============================
-	// STEP 4: START SERVER & HANDLE SHUTDOWN
-	// =============================
+	// ========== START & SHUTDOWN ==========
 	errCh := make(chan error, 1)
 	go func() {
 		if err := app.Listen(addr); err != nil {
