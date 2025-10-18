@@ -87,9 +87,9 @@ func NewServer(
 	app.Get("/health", healthHandler(cfg))
 
 	// Swagger docs (disable in production)
-	if cfg.AppEnv != "production" {
-		app.Get("/swagger/*", swagger.New(swagger.Config{}))
-	}
+	// if cfg.AppEnv != "production" {
+	// }
+	app.Get("/swagger/*", swagger.New(swagger.Config{}))
 
 	api := app.Group("/api/v1")
 
