@@ -16,8 +16,8 @@ type commentHandler struct {
 	svc service.CommentService
 }
 
-// This router is mounted under the AuthMiddleware in router.go,
-// so all routes here are protected and can read uid from Locals.
+// RegisterCommentRoutes mounts protected comment routes.
+// All routes require JWT (AuthMiddleware applied by caller).
 func RegisterCommentRoutes(r fiber.Router, svc service.CommentService) {
 	h := &commentHandler{svc: svc}
 	// POST   /comments/:todoId   -> add a comment to a todo
@@ -28,10 +28,30 @@ func RegisterCommentRoutes(r fiber.Router, svc service.CommentService) {
 	r.Delete("/:id", h.delete)
 }
 
-type commentReq struct {
+// ---------- Swagger DTOs ----------
+
+// CommentRequest is the request body for creating a comment.
+// swagger:model CommentRequest
+type CommentRequest struct {
+	// The body text of the comment
+	// example: This helped a lot—thanks!
 	Body string `json:"body"`
 }
 
+// ----------------------------------
+
+// add creates a new comment on a todo.
+//
+// @Summary      Add a comment to a todo
+// @Tags         comments
+// @Security     BearerAuth
+// @Accept       json
+// @Produce      json
+// @Param        todoId  path      string          true  "Todo ID (hex ObjectID)"
+// @Param        body    body      CommentRequest  true  "Comment payload"
+// @Success      201     {object}  models.Comment
+// @Failure      400     {object}  ErrorResponse
+// @Router       /api/v1/comments/{todoId} [post]
 func (h *commentHandler) add(c *fiber.Ctx) error {
 	uid := c.Locals("uid").(primitive.ObjectID)
 
@@ -40,7 +60,7 @@ func (h *commentHandler) add(c *fiber.Ctx) error {
 		return util.BadRequest(c, "bad todo id", nil)
 	}
 
-	var in commentReq
+	var in CommentRequest
 	if err := c.BodyParser(&in); err != nil {
 		return util.BadRequest(c, "invalid body", nil)
 	}
@@ -59,6 +79,18 @@ func (h *commentHandler) add(c *fiber.Ctx) error {
 	return util.Created(c, "comment created", com)
 }
 
+// list returns paginated comments for a todo.
+//
+// @Summary      List comments for a todo
+// @Tags         comments
+// @Security     BearerAuth
+// @Produce      json
+// @Param        todoId  path   string true  "Todo ID (hex ObjectID)"
+// @Param        limit   query  int    false "Max items to return" default(20) minimum(1) maximum(100)
+// @Param        skip    query  int    false "Items to skip (offset)" default(0) minimum(0)
+// @Success      200     {array}  models.Comment
+// @Failure      400     {object} ErrorResponse
+// @Router       /api/v1/comments/{todoId} [get]
 func (h *commentHandler) list(c *fiber.Ctx) error {
 	todoID, err := primitive.ObjectIDFromHex(c.Params("todoId"))
 	if err != nil {
@@ -89,6 +121,16 @@ func (h *commentHandler) list(c *fiber.Ctx) error {
 	return util.WithMeta(c, "comments fetched", list, meta)
 }
 
+// delete removes a comment by ID (owner only).
+//
+// @Summary      Delete a comment
+// @Tags         comments
+// @Security     BearerAuth
+// @Produce      json
+// @Param        id   path   string true "Comment ID (hex ObjectID)"
+// @Success      204  "No Content"
+// @Failure      400  {object} ErrorResponse
+// @Router       /api/v1/comments/{id} [delete]
 func (h *commentHandler) delete(c *fiber.Ctx) error {
 	uid := c.Locals("uid").(primitive.ObjectID)
 

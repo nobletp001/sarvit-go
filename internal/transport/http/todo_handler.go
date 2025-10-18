@@ -20,27 +20,57 @@ type todoHandler struct {
 func RegisterTodoRoutes(r fiber.Router, svc service.TodoService) {
 	h := &todoHandler{svc: svc}
 
-	// Protected routes (this group is mounted under AuthMiddleware in router.go)
+	// Protected routes (mounted under AuthMiddleware by caller)
 	r.Post("/", h.create)
 	r.Patch("/:id", h.update)
 	r.Delete("/:id", h.delete)
 	r.Post("/:id/like", h.like)
 	r.Post("/:id/unlike", h.unlike)
 
-	// Public read routes (still accessible; if you want them protected, move above)
+	// Public read routes
 	r.Get("/:id", h.getByID)
 	r.Get("/author/:id", h.listByAuthor)
 }
 
-type todoCreateReq struct {
+// ---------- Swagger DTOs ----------
+
+// TodoCreateRequest is the request payload for creating a todo.
+// swagger:model TodoCreateRequest
+type TodoCreateRequest struct {
+	// Title of the todo
+	// example: Ship Swagger docs
 	Title string `json:"title"`
-	Body  string `json:"body"`
+	// Optional body/content
+	// example: Add handlers annotations and push to Railway
+	Body string `json:"body"`
 }
 
+// TodoUpdateRequest is the request payload for updating a todo (partial).
+// swagger:model TodoUpdateRequest
+type TodoUpdateRequest struct {
+	// New title (optional)
+	Title *string `json:"title"`
+	// New body (optional)
+	Body *string `json:"body"`
+}
+
+// ----------------------------------
+
+// create creates a new todo.
+//
+// @Summary      Create todo
+// @Tags         todos
+// @Security     BearerAuth
+// @Accept       json
+// @Produce      json
+// @Param        body  body      TodoCreateRequest  true  "Create payload"
+// @Success      201   {object}  models.Todo
+// @Failure      400   {object}  ErrorResponse
+// @Router       /api/v1/todos [post]
 func (h *todoHandler) create(c *fiber.Ctx) error {
 	uid := c.Locals("uid").(primitive.ObjectID)
 
-	var in todoCreateReq
+	var in TodoCreateRequest
 	if err := c.BodyParser(&in); err != nil {
 		return util.BadRequest(c, "invalid body", nil)
 	}
@@ -60,6 +90,16 @@ func (h *todoHandler) create(c *fiber.Ctx) error {
 	return util.Created(c, "todo created", t)
 }
 
+// getByID returns a todo by ID.
+//
+// @Summary      Get todo by ID
+// @Tags         todos
+// @Produce      json
+// @Param        id   path     string true "Todo ID (hex ObjectID)"
+// @Success      200  {object} models.Todo
+// @Failure      400  {object} ErrorResponse
+// @Failure      404  {object} ErrorResponse
+// @Router       /api/v1/todos/{id} [get]
 func (h *todoHandler) getByID(c *fiber.Ctx) error {
 	id, err := primitive.ObjectIDFromHex(c.Params("id"))
 	if err != nil {
@@ -76,6 +116,17 @@ func (h *todoHandler) getByID(c *fiber.Ctx) error {
 	return util.OK(c, "todo fetched", t)
 }
 
+// listByAuthor returns todos for a given author with pagination.
+//
+// @Summary      List todos by author
+// @Tags         todos
+// @Produce      json
+// @Param        id     path   string true  "Author ID (hex ObjectID)"
+// @Param        limit  query  int    false "Max items to return" default(20) minimum(1) maximum(100)
+// @Param        skip   query  int    false "Items to skip (offset)" default(0) minimum(0)
+// @Success      200    {array} models.Todo
+// @Failure      400    {object} ErrorResponse
+// @Router       /api/v1/todos/author/{id} [get]
 func (h *todoHandler) listByAuthor(c *fiber.Ctx) error {
 	authorID, err := primitive.ObjectIDFromHex(c.Params("id"))
 	if err != nil {
@@ -106,11 +157,18 @@ func (h *todoHandler) listByAuthor(c *fiber.Ctx) error {
 	return util.WithMeta(c, "todos fetched", list, meta)
 }
 
-type todoUpdateReq struct {
-	Title *string `json:"title"`
-	Body  *string `json:"body"`
-}
-
+// update edits title/body of a todo.
+//
+// @Summary      Update todo
+// @Tags         todos
+// @Security     BearerAuth
+// @Accept       json
+// @Produce      json
+// @Param        id    path      string             true  "Todo ID (hex ObjectID)"
+// @Param        body  body      TodoUpdateRequest  true  "Update payload (at least one field)"
+// @Success      204   "No Content"
+// @Failure      400   {object}  ErrorResponse
+// @Router       /api/v1/todos/{id} [patch]
 func (h *todoHandler) update(c *fiber.Ctx) error {
 	uid := c.Locals("uid").(primitive.ObjectID)
 
@@ -119,7 +177,7 @@ func (h *todoHandler) update(c *fiber.Ctx) error {
 		return util.BadRequest(c, "bad id", nil)
 	}
 
-	var in todoUpdateReq
+	var in TodoUpdateRequest
 	if err := c.BodyParser(&in); err != nil {
 		return util.BadRequest(c, "invalid body", nil)
 	}
@@ -148,6 +206,16 @@ func (h *todoHandler) update(c *fiber.Ctx) error {
 	return util.NoContent(c, "todo updated")
 }
 
+// delete removes a todo by ID.
+//
+// @Summary      Delete todo
+// @Tags         todos
+// @Security     BearerAuth
+// @Produce      json
+// @Param        id   path   string true "Todo ID (hex ObjectID)"
+// @Success      204  "No Content"
+// @Failure      400  {object} ErrorResponse
+// @Router       /api/v1/todos/{id} [delete]
 func (h *todoHandler) delete(c *fiber.Ctx) error {
 	uid := c.Locals("uid").(primitive.ObjectID)
 
@@ -165,6 +233,16 @@ func (h *todoHandler) delete(c *fiber.Ctx) error {
 	return util.NoContent(c, "todo deleted")
 }
 
+// like toggles a like on.
+//
+// @Summary      Like todo
+// @Tags         todos
+// @Security     BearerAuth
+// @Produce      json
+// @Param        id   path   string true "Todo ID (hex ObjectID)"
+// @Success      204  "No Content"
+// @Failure      400  {object} ErrorResponse
+// @Router       /api/v1/todos/{id}/like [post]
 func (h *todoHandler) like(c *fiber.Ctx) error {
 	uid := c.Locals("uid").(primitive.ObjectID)
 
@@ -182,6 +260,16 @@ func (h *todoHandler) like(c *fiber.Ctx) error {
 	return util.NoContent(c, "liked")
 }
 
+// unlike removes a like.
+//
+// @Summary      Unlike todo
+// @Tags         todos
+// @Security     BearerAuth
+// @Produce      json
+// @Param        id   path   string true "Todo ID (hex ObjectID)"
+// @Success      204  "No Content"
+// @Failure      400  {object} ErrorResponse
+// @Router       /api/v1/todos/{id}/unlike [post]
 func (h *todoHandler) unlike(c *fiber.Ctx) error {
 	uid := c.Locals("uid").(primitive.ObjectID)
 

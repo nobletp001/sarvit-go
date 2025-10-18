@@ -1,0 +1,484 @@
+definitions:
+  http.AuthResponse:
+    properties:
+      token:
+        description: |-
+          The JWT bearer token
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+      user:
+        description: The authenticated user object
+    type: object
+  http.CommentRequest:
+    properties:
+      body:
+        description: |-
+          The body text of the comment
+          example: This helped a lot—thanks!
+        type: string
+    type: object
+  http.ErrorResponse:
+    properties:
+      data:
+        description: optional data payload (usually null on error)
+      message:
+        description: |-
+          human-readable message
+          example: email already in use
+        type: string
+      status:
+        description: |-
+          always "error" on failures
+          example: error
+        type: string
+    type: object
+  http.LoginRequest:
+    properties:
+      email:
+        description: |-
+          The user's email address
+          example: joshua@example.com
+        type: string
+      password:
+        description: |-
+          The user's password
+          example: StrongPass#123
+        type: string
+    type: object
+  http.SignupRequest:
+    properties:
+      email:
+        description: |-
+          The user's email address
+          example: joshua@example.com
+        type: string
+      name:
+        description: |-
+          The user's full name
+          example: Temitope Joshua
+        type: string
+      password:
+        description: |-
+          The user's password
+          example: StrongPass#123
+        type: string
+    type: object
+  http.TodoCreateRequest:
+    properties:
+      body:
+        description: |-
+          Optional body/content
+          example: Add handlers annotations and push to Railway
+        type: string
+      title:
+        description: |-
+          Title of the todo
+          example: Ship Swagger docs
+        type: string
+    type: object
+  http.TodoUpdateRequest:
+    properties:
+      body:
+        description: New body (optional)
+        type: string
+      title:
+        description: New title (optional)
+        type: string
+    type: object
+  models.Comment:
+    properties:
+      authorId:
+        description: The ID of the user who authored the comment
+        type: string
+      body:
+        description: The body text of the comment
+        type: string
+      createdAt:
+        description: The date and time when the comment was created
+        type: string
+      id:
+        description: The unique ID of the comment
+        type: string
+      todoId:
+        description: The ID of the todo this comment belongs to
+        type: string
+    type: object
+  models.Todo:
+    properties:
+      authorId:
+        description: The ID of the user who created the todo
+        type: string
+      body:
+        description: The body or content of the todo
+        type: string
+      createdAt:
+        description: The date and time when the todo was created
+        type: string
+      id:
+        description: The unique ID of the todo
+        type: string
+      likes:
+        description: A list of user IDs who liked this todo
+        items:
+          type: string
+        type: array
+      title:
+        description: The title of the todo
+        type: string
+      updatedAt:
+        description: The date and time when the todo was last updated
+        type: string
+    type: object
+info:
+  contact: {}
+paths:
+  /api/v1/auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticates a user with email/password and returns a JWT + user
+      parameters:
+      - description: Login credentials
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/http.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.AuthResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "401":
+          description: password is not correct
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Login
+      tags:
+      - auth
+  /api/v1/auth/signup:
+    post:
+      consumes:
+      - application/json
+      description: Creates a user account and returns a JWT + user
+      parameters:
+      - description: Signup payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/http.SignupRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/http.AuthResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "409":
+          description: email already in use
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Register a new user
+      tags:
+      - auth
+  /api/v1/comments/{id}:
+    delete:
+      parameters:
+      - description: Comment ID (hex ObjectID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a comment
+      tags:
+      - comments
+  /api/v1/comments/{todoId}:
+    get:
+      parameters:
+      - description: Todo ID (hex ObjectID)
+        in: path
+        name: todoId
+        required: true
+        type: string
+      - default: 20
+        description: Max items to return
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      - default: 0
+        description: Items to skip (offset)
+        in: query
+        minimum: 0
+        name: skip
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.Comment'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List comments for a todo
+      tags:
+      - comments
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Todo ID (hex ObjectID)
+        in: path
+        name: todoId
+        required: true
+        type: string
+      - description: Comment payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/http.CommentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Comment'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Add a comment to a todo
+      tags:
+      - comments
+  /api/v1/todos:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Create payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/http.TodoCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Todo'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create todo
+      tags:
+      - todos
+  /api/v1/todos/{id}:
+    delete:
+      parameters:
+      - description: Todo ID (hex ObjectID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete todo
+      tags:
+      - todos
+    get:
+      parameters:
+      - description: Todo ID (hex ObjectID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Todo'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Get todo by ID
+      tags:
+      - todos
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Todo ID (hex ObjectID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Update payload (at least one field)
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/http.TodoUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update todo
+      tags:
+      - todos
+  /api/v1/todos/{id}/like:
+    post:
+      parameters:
+      - description: Todo ID (hex ObjectID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Like todo
+      tags:
+      - todos
+  /api/v1/todos/{id}/unlike:
+    post:
+      parameters:
+      - description: Todo ID (hex ObjectID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Unlike todo
+      tags:
+      - todos
+  /api/v1/todos/author/{id}:
+    get:
+      parameters:
+      - description: Author ID (hex ObjectID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - default: 20
+        description: Max items to return
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      - default: 0
+        description: Items to skip (offset)
+        in: query
+        minimum: 0
+        name: skip
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.Todo'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: List todos by author
+      tags:
+      - todos
+  /health:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Health
+      tags:
+      - meta
+swagger: "2.0"
